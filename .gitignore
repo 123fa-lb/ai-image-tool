@@ -1,0 +1,31 @@
+﻿.env
+venv/
+.venv/
+__pycache__/
+*.pyc
+uploads/
+outputs/
+frontend/node_modules/
+frontend/dist/
+backend/__pycache__/
+backend/**/__pycache__/
+
+# Local backup files
+*.bak
+*.backup
+*.before*
+*.corrupted-*
+*.current-broken
+App_before_login.jsx
+
+# Backup files
+*-backup.*
+*-backup
+*_backup.*
+*_backup
+main_*backup.py
+main*.before-*
+App_before_*.jsx
+index_before_*.css
+
+backend/main_before_duplicate_fix.py

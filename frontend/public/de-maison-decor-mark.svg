@@ -1,0 +1,11 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+  <rect width="160" height="160" rx="18" fill="#26372a"/>
+  <rect x="9" y="9" width="142" height="142" rx="13" fill="none" stroke="#bda36b" stroke-width="2"/>
+  <path d="M35 67 80 29 125 67" fill="none" stroke="#d5bd82" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M46 64v-9l34-29 34 29v9" fill="none" stroke="#f5edda" stroke-width="2.5" stroke-linejoin="round"/>
+  <rect x="34" y="65" width="92" height="48" rx="5" fill="#bda36b"/>
+  <rect x="39" y="70" width="82" height="38" rx="3" fill="#26372a"/>
+  <text x="80" y="95" text-anchor="middle" font-family="Georgia,serif" font-size="25" font-weight="bold" fill="#e5d19b">DMD</text>
+  <path d="M48 122h64" stroke="#bda36b" stroke-width="1.5"/>
+  <text x="80" y="135" text-anchor="middle" font-family="Georgia,serif" font-size="8.5" letter-spacing="1.4" fill="#f5edda">DE MAISON DECOR</text>
+</svg>

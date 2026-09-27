@@ -1,0 +1,1003 @@
+import { useState } from "react";
+
+function App() {
+  const [mode, setMode] = useState("single");
+
+  // Login
+  const [authToken, setAuthToken] = useState("");
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+
+  // Single mode
+  const [image, setImage] = useState(null);
+  const [result, setResult] = useState(null);
+
+  // Batch mode
+  const [images, setImages] = useState([]);
+  const [batchResults, setBatchResults] = useState([]);
+
+  // Common
+  const [prompt, setPrompt] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [currentBatch, setCurrentBatch] = useState(0);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [zipLoading, setZipLoading] = useState(false);
+
+  // ==================================================
+  // LOGIN
+  const handleLogin = async (e) => {
+    if (e) e.preventDefault();
+
+    setLoginLoading(true);
+    setLoginError("");
+
+    try {
+      const response = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          username: loginUsername,
+          password: loginPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.access_token) {
+        throw new Error(data.detail || "Login failed. Check your username and password.");
+      }
+
+      setAuthToken(data.access_token);
+      setLoginPassword("");
+    } catch (error) {
+      setLoginError(error.message || "Could not connect to the backend.");
+    } finally {
+      setLoginLoading(false);
+    }
+  };
+
+  // SINGLE IMAGE SELECT
+  // ==================================================
+
+  const handleSingleImageChange = (e) => {
+    const selectedImage = e.target.files[0];
+
+    if (selectedImage) {
+      setImage(selectedImage);
+      setResult(null);
+    }
+  };
+
+  // ==================================================
+  // SINGLE IMAGE PROCESS
+  // ==================================================
+
+  const handleProcess = async () => {
+    if (!image) {
+      alert("Please select an image.");
+      return;
+    }
+
+    if (!prompt.trim()) {
+      alert("Please enter a prompt.");
+      return;
+    }
+
+    setLoading(true);
+    setResult(null);
+
+    const formData = new FormData();
+
+    formData.append("image", image);
+    formData.append("prompt", prompt);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/process",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: formData,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(
+          data.error || "Processing failed."
+        );
+      }
+
+      setResult(data);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================================================
+  // FOLDER SELECT
+  // ==================================================
+
+  const handleFolderChange = (e) => {
+    const selectedFiles = Array.from(e.target.files || []);
+    const imageFiles = selectedFiles.filter((file) =>
+      file.type.startsWith("image/")
+    );
+
+    e.target.value = "";
+
+    if (imageFiles.length === 0) {
+      alert("No image files found in this folder.");
+      return;
+    }
+setImages(imageFiles);
+    setBatchResults([]);
+    setProgress(0);
+    setCurrentBatch(0);
+    setTotalBatches(Math.ceil(imageFiles.length / 10));
+  };
+
+  // ==================================================
+  // REMOVE IMAGE
+  // ==================================================
+
+  const removeImage = (indexToRemove) => {
+    setImages((currentImages) =>
+      currentImages.filter(
+        (_, index) => index !== indexToRemove
+      )
+    );
+
+    setBatchResults([]);
+    setProgress(0);
+    setCurrentBatch(0);
+  };
+
+  // ==================================================
+  // PROCESS ONE BATCH
+  // ==================================================
+
+  const processBatch = async (batchImages) => {
+    const formData = new FormData();
+
+    batchImages.forEach((image) => {
+      formData.append("images", image);
+    });
+
+    formData.append("prompt", prompt);
+
+    const response = await fetch(
+      "http://127.0.0.1:8000/process-batch",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: formData,
+      }
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(
+        data.error || "Batch processing failed."
+      );
+    }
+
+    return data;
+  };
+
+  // ==================================================
+  // PROCESS ALL IMAGES
+  // ==================================================
+
+  const handleProcessAll = async () => {
+    if (images.length === 0) {
+      alert(
+        "Please select a folder containing images."
+      );
+      return;
+    }
+
+    if (!prompt.trim()) {
+      alert("Please enter a prompt.");
+      return;
+    }
+
+    setLoading(true);
+    setBatchResults([]);
+    setProgress(0);
+
+    // Create batches of 10
+    const batches = [];
+
+    for (let i = 0; i < images.length; i += 10) {
+      batches.push(
+        images.slice(i, i + 10)
+      );
+    }
+
+    setTotalBatches(batches.length);
+
+    const allResults = [];
+
+    try {
+      // Process batches one by one
+      for (
+        let i = 0;
+        i < batches.length;
+        i++
+      ) {
+        const batchNumber = i + 1;
+
+        setCurrentBatch(batchNumber);
+
+        const data = await processBatch(
+          batches[i]
+        );
+
+        allResults.push(...data.results);
+
+        setBatchResults([...allResults]);
+
+        // Calculate progress
+        const completedImages = Math.min(
+          (i + 1) * 10,
+          images.length
+        );
+
+        setProgress(
+          Math.round(
+            (completedImages / images.length) * 100
+          )
+        );
+      }
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ==================================================
+  // DOWNLOAD ZIP
+  // ==================================================
+
+  const handleDownloadZip = async () => {
+    const successfulResults =
+      batchResults.filter(
+        (item) => item.success
+      );
+
+    if (successfulResults.length === 0) {
+      alert(
+        "No successful images to download."
+      );
+      return;
+    }
+
+    setZipLoading(true);
+
+    try {
+      const response = await fetch(
+        "http://127.0.0.1:8000/download-zip",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+
+          body: JSON.stringify({
+            results: successfulResults,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "ZIP download failed."
+        );
+      }
+
+      const blob = await response.blob();
+
+      const url =
+        window.URL.createObjectURL(blob);
+
+      const link =
+        document.createElement("a");
+
+      link.href = url;
+
+      link.download =
+        "processed_images.zip";
+
+      document.body.appendChild(link);
+
+      link.click();
+
+      link.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setZipLoading(false);
+    }
+  };
+
+  // ==================================================
+  // MODE CHANGE
+  // ==================================================
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+
+    setResult(null);
+    setBatchResults([]);
+    setProgress(0);
+    setCurrentBatch(0);
+    setLoading(false);
+  };
+
+  // ==================================================
+  // UI
+  // ==================================================
+
+  if (!authToken) {
+    return (
+      <div className="app">
+        <header className="header">
+          <h1>DecorFrame Studio</h1>
+          <p>Sign in to continue</p>
+        </header>
+
+        <main className="container">
+          <section className="card">
+            <h2>Welcome Back</h2>
+
+            <form onSubmit={handleLogin}>
+              <label htmlFor="login-username">Username</label>
+              <input
+                id="login-username"
+                type="text"
+                value={loginUsername}
+                onChange={(e) => setLoginUsername(e.target.value)}
+                autoComplete="username"
+                required
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px", margin: "8px 0 16px" }}
+              />
+
+              <label htmlFor="login-password">Password</label>
+              <input
+                id="login-password"
+                type="password"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px", margin: "8px 0 16px" }}
+              />
+
+              {loginError && (
+                <p className="error-text">{loginError}</p>
+              )}
+
+              <button type="submit" disabled={loginLoading}>
+                {loginLoading ? "Signing in..." : "Login"}
+              </button>
+            </form>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="app">
+
+      {/* HEADER */}
+
+      <header className="header">
+        <h1>
+          DecorFrame Studio
+        </h1>
+
+        <p>
+          Resize and prepare home-decor product photos for your online store.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => {
+            setAuthToken("");
+            setLoginError("");
+            setLoginPassword("");
+          }}
+        >
+          Logout
+        </button>
+      </header>
+
+
+      <main className="container">
+
+        {/* ==================================================
+            INPUT CARD
+        ================================================== */}
+
+        <section className="card">
+
+          {/* MODE SWITCH */}
+
+          <div className="mode-switch">
+
+            <button
+              className={
+                mode === "single"
+                  ? "mode-btn active"
+                  : "mode-btn"
+              }
+              onClick={() =>
+                handleModeChange("single")
+              }
+            >
+              Single Image
+            </button>
+
+            <button
+              className={
+                mode === "batch"
+                  ? "mode-btn active"
+                  : "mode-btn"
+              }
+              onClick={() =>
+                handleModeChange("batch")
+              }
+            >
+              Batch Mode
+            </button>
+
+          </div>
+
+
+          {/* ==================================================
+              SINGLE MODE
+          ================================================== */}
+
+          {mode === "single" && (
+            <>
+              <h2>
+                Upload Image
+              </h2>
+
+              <label className="upload-box">
+
+                {image ? (
+                  <span>
+                    {image.name}
+                  </span>
+                ) : (
+                  <span>
+                    Click to select an image
+                  </span>
+                )}
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={
+                    handleSingleImageChange
+                  }
+                />
+
+              </label>
+
+
+              {image && (
+                <div className="preview">
+
+                  <img
+                    src={URL.createObjectURL(image)}
+                    alt="Selected"
+                  />
+
+                </div>
+              )}
+
+            </>
+          )}
+
+
+          {/* ==================================================
+              BATCH MODE
+          ================================================== */}
+
+          {mode === "batch" && (
+            <>
+
+              <h2>
+                Select Image Folder
+              </h2>
+
+
+              <p className="batch-help">
+                Select your complete folder.
+                The tool automatically processes
+                images in batches of 10.
+              </p>
+
+
+              <label className="upload-box batch-upload">
+
+                <span>
+                  {images.length > 0
+                    ? `${images.length} images selected`
+                    : "Click to select image folder"}
+                </span>
+
+
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  webkitdirectory=""
+                  directory=""
+                  onChange={
+                    handleFolderChange
+                  }
+                />
+
+              </label>
+
+
+              {/* FOLDER INFO */}
+
+              {images.length > 0 && (
+                <div className="folder-info">
+
+                  <strong>
+                    {images.length} images found
+                  </strong>
+
+                  <span>
+                    {Math.ceil(
+                      images.length / 10
+                    )} batches will be processed
+                  </span>
+
+                </div>
+              )}
+
+
+              {/* IMAGE LIST */}
+
+              {images.length > 0 && (
+                <div className="batch-list">
+
+                  {images.map(
+                    (image, index) => (
+
+                      <div
+                        className="batch-item"
+                        key={`${image.name}-${index}`}
+                      >
+
+                        <div className="batch-item-info">
+
+                          <span className="batch-number">
+                            {index + 1}
+                          </span>
+
+                          <span className="batch-name">
+                            {image.name}
+                          </span>
+
+                        </div>
+
+
+                        <button
+                          type="button"
+                          className="remove-btn"
+                          aria-label={`Remove ${image.name}`}
+                          title="Remove image"
+                          onClick={() => removeImage(index)}
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h16M10 11v6m4-6v6M6 7l1 14h10l1-14M9 7V4h6v3"
+                              fill="none" stroke="currentColor" strokeWidth="1.8"
+                              strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+              )}
+
+
+              {/* PROGRESS */}
+
+              {loading && (
+                <div className="progress-section">
+
+                  <div className="progress-top">
+
+                    <span>
+                      Processing batch{" "}
+                      {currentBatch} of{" "}
+                      {totalBatches}
+                    </span>
+
+                    <strong>
+                      {progress}%
+                    </strong>
+
+                  </div>
+
+
+                  <div className="progress-bar">
+
+                    <div
+                      className="progress-fill"
+                      style={{
+                        width: `${progress}%`,
+                      }}
+                    />
+
+                  </div>
+
+
+                  <p>
+                    Please keep this page open
+                    while processing.
+                  </p>
+
+                </div>
+              )}
+
+            </>
+          )}
+
+
+          {/* ==================================================
+              PROMPT
+          ================================================== */}
+
+          <h2>
+            Tell the AI what to do
+          </h2>
+
+
+          <textarea
+            value={prompt}
+            onChange={(e) =>
+              setPrompt(e.target.value)
+            }
+            placeholder="Example: Make all images 1200x1800 and naturally extend the background. Do not stretch the subject."
+          />
+
+
+          {/* ==================================================
+              PROCESS BUTTON
+          ================================================== */}
+
+          {mode === "single" ? (
+
+            <button
+              onClick={handleProcess}
+              disabled={loading}
+            >
+              {loading
+                ? "Processing..."
+                : "Process Image"}
+            </button>
+
+          ) : (
+
+            <button
+              onClick={handleProcessAll}
+              disabled={
+                loading ||
+                images.length === 0
+              }
+            >
+              {loading
+                ? "Processing..."
+                : `Process ${images.length} Images`}
+            </button>
+
+          )}
+
+        </section>
+
+
+        {/* ==================================================
+            SINGLE RESULT
+        ================================================== */}
+
+        {mode === "single" &&
+          result && (
+
+            <section className="card result-card">
+
+              <h2>
+                Processed Image
+              </h2>
+
+
+              <div className="result-preview">
+
+                <img
+                  src={
+                    result.processed_image
+                  }
+                  alt="Processed result"
+                />
+
+              </div>
+
+
+              <div className="info">
+
+                <p>
+                  <strong>
+                    Original:
+                  </strong>{" "}
+                  {result.original.width}
+                  {" " + String.fromCharCode(215) + " "}
+                  {result.original.height}
+                </p>
+
+
+                <p>
+                  <strong>
+                    Target:
+                  </strong>{" "}
+                  {result.target.width}
+                  {" " + String.fromCharCode(215) + " "}
+                  {result.target.height}
+                </p>
+
+              </div>
+
+
+              <a
+                href={
+                  result.processed_image
+                }
+                target="_blank"
+                rel="noreferrer"
+                className="download-btn"
+              >
+                Open / Download Result
+              </a>
+
+            </section>
+          )}
+
+
+        {/* ==================================================
+            BATCH RESULTS
+        ================================================== */}
+
+        {mode === "batch" &&
+          batchResults.length > 0 && (
+
+            <section className="card result-card">
+
+              <div className="batch-results-title">
+
+                <h2>
+                  Batch Results
+                </h2>
+
+
+                <button
+                  type="button"
+                  className="zip-download-btn"
+                  onClick={
+                    handleDownloadZip
+                  }
+                  disabled={zipLoading}
+                >
+                  {zipLoading
+                    ? "Creating ZIP..."
+                    : "Download All as ZIP"}
+                </button>
+
+              </div>
+
+
+              {/* SUMMARY */}
+
+              <div className="batch-summary">
+
+                <div>
+                  <strong>
+                    {images.length}
+                  </strong>
+
+                  <span>
+                    Total Images
+                  </span>
+                </div>
+
+
+                <div>
+                  <strong>
+                    {
+                      batchResults.filter(
+                        (item) =>
+                          item.success
+                      ).length
+                    }
+                  </strong>
+
+                  <span>
+                    Successful
+                  </span>
+                </div>
+
+
+                <div>
+                  <strong>
+                    {
+                      batchResults.filter(
+                        (item) =>
+                          !item.success
+                      ).length
+                    }
+                  </strong>
+
+                  <span>
+                    Failed
+                  </span>
+                </div>
+
+              </div>
+
+
+              {/* RESULTS */}
+
+              <div className="batch-results">
+
+                {batchResults.map(
+                  (item, index) => (
+
+                    <div
+                      className="batch-result-item"
+                      key={`${item.filename}-${index}`}
+                    >
+
+                      <div className="batch-result-header">
+
+                        <strong>
+                          {index + 1}.{" "}
+                          {item.filename}
+                        </strong>
+
+
+                        <span
+                          className={
+                            item.success
+                              ? "success"
+                              : "failed"
+                          }
+                        >
+                          {item.success
+                            ? "Success"
+                            : "Failed"}
+                        </span>
+
+                      </div>
+
+
+                      {item.success ? (
+
+                        <>
+                          <div className="batch-result-preview">
+
+                            <img
+                              src={
+                                item.processed_image
+                              }
+                              alt={
+                                item.filename
+                              }
+                            />
+
+                          </div>
+
+
+                          <p>
+                            <strong>
+                              Original:
+                            </strong>{" "}
+                            {
+                              item.original.width
+                            }
+                            {" " + String.fromCharCode(215) + " "}
+                            {
+                              item.original.height
+                            }
+                          </p>
+
+
+                          <p>
+                            <strong>
+                              Target:
+                            </strong>{" "}
+                            {
+                              item.target.width
+                            }
+                            {" " + String.fromCharCode(215) + " "}
+                            {
+                              item.target.height
+                            }
+                          </p>
+
+
+                          <a
+                            href={
+                              item.processed_image
+                            }
+                            target="_blank"
+                            rel="noreferrer"
+                            className="download-btn"
+                          >
+                            Open / Download
+                          </a>
+
+                        </>
+
+                      ) : (
+
+                        <p className="error-text">
+                          Error:{" "}
+                          {item.error}
+                        </p>
+
+                      )}
+
+                    </div>
+
+                  )
+                )}
+
+              </div>
+
+            </section>
+          )}
+
+      </main>
+
+
+
+    </div>
+  );
+}
+
+export default App;
+
+
+
+
+
+
