@@ -71,7 +71,7 @@ function App() {
     setLoginError("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/login", {
+      const response = await fetch("https://de-maison-decor.onrender.com/login", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +137,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/process",
+        "https://de-maison-decor.onrender.com/process",
         {
           method: "POST",
           headers: {
@@ -373,7 +373,7 @@ function App() {
     formData.append("prompt", prompt);
 
     const response = await fetch(
-      "http://127.0.0.1:8000/process-batch",
+      "https://de-maison-decor.onrender.com/process-batch",
       {
         method: "POST",
         headers: {
@@ -487,7 +487,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://127.0.0.1:8000/download-zip",
+        "https://de-maison-decor.onrender.com/download-zip",
         {
           method: "POST",
 
@@ -1289,3 +1289,4 @@ function App() {
 }
 
 export default App;
+
